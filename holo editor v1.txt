@@ -97,46 +97,54 @@ elseif CLIENT then
     local editorstart,editorend = resX*0.9,resX*0.1
     local infopanelstart,infopanelend = resY*0.66,resY*0.34
     
+    local render_setColor = render.setColor
+    local render_drawRect = render.drawRect
+    local render_drawRectOutline = render.drawRectOutline
+    local render_drawSimpleTextOutlined = render.drawSimpleTextOutlined
+    local render_setMaterial = render.setMaterial
+    local render_drawTexturedRectFast = render.drawTexturedRectFast
+    local render_getTextSize = render.getTextSize
+    
     local activeButton = nil
     local function ui_Button(index,x,y,text,func)
-        local textX,textY = render.getTextSize(text)
+        local textX,textY = render_getTextSize(text)
         local clk = input_LEFTCLICK and cursorX > x and cursorY > y and cursorX < x+textX+3 and cursorY < y+textY+3
         if clk and activeButton ~= index then activeButton = index end
-        if activeButton == index then func() render.setColor(COLORS.border) render.drawRect(x,y,textX+3,textY+3) end
+        if activeButton == index then func() render_setColor(COLORS.border) render_drawRect(x,y,textX+3,textY+3) end
         
-        render.setColor(COLORS.text)
-        render.drawRectOutline(x,y,textX+3,textY+3)
-        render.drawSimpleTextOutlined(x+1.5,y+1.5,text,1,COLORS.textoutline,TEXT_ALIGN.LEFT,TEXT_ALIGN.TOP)
+        render_setColor(COLORS.text)
+        render_drawRectOutline(x,y,textX+3,textY+3)
+        render_drawSimpleTextOutlined(x+1.5,y+1.5,text,1,COLORS.textoutline,TEXT_ALIGN.LEFT,TEXT_ALIGN.TOP)
     end
     local function button(x,y,text,func)
-        local textX,textY = render.getTextSize(text)
+        local textX,textY = render_getTextSize(text)
         local clk = changed_LEFTCLICK and input_LEFTCLICK and cursorX > x and cursorY > y and cursorX < x+textX+3 and cursorY < y+textY+3
-        if clk then func() render.setColor(COLORS.border) render.drawRect(x,y,textX+3,textY+3) end
-        render.setColor(COLORS.border)
-        render.drawRectOutline(x,y,textX+3,textY+3)
-        render.setColor(COLORS.text)
-        render.drawSimpleTextOutlined(x+1.5,y+1.5,text,1,COLORS.textoutline,TEXT_ALIGN.LEFT,TEXT_ALIGN.TOP)
+        if clk then func() render_setColor(COLORS.border) render_drawRect(x,y,textX+3,textY+3) end
+        render_setColor(COLORS.border)
+        render_drawRectOutline(x,y,textX+3,textY+3)
+        render_setColor(COLORS.text)
+        render_drawSimpleTextOutlined(x+1.5,y+1.5,text,1,COLORS.textoutline,TEXT_ALIGN.LEFT,TEXT_ALIGN.TOP)
         if clk then return func() end
     end
     local switchBoolTable = {}
     local function switch(index,x,y,text,func)
-        local textX,textY = render.getTextSize(text)
+        local textX,textY = render_getTextSize(text)
         local clk = changed_LEFTCLICK and input_LEFTCLICK and cursorX > x and cursorY > y and cursorX < x+textX+3 and cursorY < y+textY+3
-        if switchBoolTable[index] == nil then switchBoolTable[index] = false elseif switchBoolTable[index] then render.setColor(COLORS.border) render.drawRect(x,y,textX+3,textY+3) end
+        if switchBoolTable[index] == nil then switchBoolTable[index] = false elseif switchBoolTable[index] then render_setColor(COLORS.border) render_drawRect(x,y,textX+3,textY+3) end
         if clk then switchBoolTable[index] = !switchBoolTable[index] if switchBoolTable[index] then func() end end
         
-        render.setColor(COLORS.border)
-        render.drawRectOutline(x,y,textX+3,textY+3)
-        render.setColor(COLORS.text)
-        render.drawSimpleTextOutlined(x+1.5,y+1.5,text,1,COLORS.textoutline,TEXT_ALIGN.LEFT,TEXT_ALIGN.TOP)
+        render_setColor(COLORS.border)
+        render_drawRectOutline(x,y,textX+3,textY+3)
+        render_setColor(COLORS.text)
+        render_drawSimpleTextOutlined(x+1.5,y+1.5,text,1,COLORS.textoutline,TEXT_ALIGN.LEFT,TEXT_ALIGN.TOP)
         
         return switchBoolTable[index]
     end
     local mat = material.create("UnlitGeneric")
     local function ui_Spawnicon(x,y,path)
         mat:setTexture("$basetexture","spawnicons/"..string.replace(path,"mdl","png"))
-        render.setMaterial(mat)
-        render.drawTexturedRectFast(x,y,24,24)
+        render_setMaterial(mat)
+        render_drawTexturedRectFast(x,y,24,24)
     end
     local function closeAllBools()
         for _,v in pairs(switchBoolTable) do v = false end
@@ -145,10 +153,10 @@ elseif CLIENT then
     hook.add("postdrawhud","PhoenixEditor-DrawHud",function()
         if input.isControlLocked() then
             render.setFont(COLORS.font)
-            render.setColor(COLORS.background)
+            render_setColor(COLORS.background)
             render.drawRectFast(editorstart,0,editorend,resY)
-            render.setColor(COLORS.border)
-            render.drawRectOutline(editorstart,infopanelstart,editorend,infopanelend,2)
+            render_setColor(COLORS.border)
+            render_drawRectOutline(editorstart,infopanelstart,editorend,infopanelend,2)
             ui_Button(1,editorstart,0,"FILE",function()
                 button(editorstart+5,infopanelstart+(infopanelend*0.01),"QuickSave",function() PHE_save(os.date("%b")..os.date("%d")..os.date("%Y").."_"..os.time()) end)
                 if switch("LoadPHE",editorstart+5,infopanelstart+(infopanelend*0.08),"Load from PHE",function()end) then
@@ -161,9 +169,9 @@ elseif CLIENT then
                     local files,dirs = file.find("phoenixholoeditor/autosaves/*","namedesc")
                 end
                 end)
-            ui_Button(2,editorstart+render.getTextSize("FILE")+10,0,"EDIT",function()
+            ui_Button(2,editorstart+render_getTextSize("FILE")+10,0,"EDIT",function()
                 end)
-            ui_Button(3,editorstart+render.getTextSize("FILE")+render.getTextSize("EDIT")+20,0,"TOOLS",function()
+            ui_Button(3,editorstart+render_getTextSize("FILE")+render_getTextSize("EDIT")+20,0,"TOOLS",function()
                 end)
             for i,v in pairs(Holograms) do
                 if UI_SHOWICONS then ui_Spawnicon(editorstart+4,30+(26*(i-1)),v:getModel()) end
