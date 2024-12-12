@@ -1,0 +1,188 @@
+--VERSION1
+--@name Phoenix Holo Editor
+--@author jon b
+--@shared
+if SERVER then
+    net.receive("RemoveSpawnedEntity",function() net.readEntity():remove() end)
+elseif CLIENT then
+    if player() == owner() then
+    enableHud(owner(),true)
+    local editorEnableKey = KEY.P --change P to whatever key you want
+    local COLORS = {
+        background = Color(50,50,50),
+        border = Color(155,155,155),
+        text = Color(255,255,255),
+        textoutline = Color(0,0,0),
+        font = "Trebuchet18"
+    }
+    local AUTOSAVE_interval = 60 --in seconds. currently doesnt do anything
+    local UI_SHOWICONS = true --if you are getting laggy performace turn this off
+    
+    Origin = hologram.create(chip():getPos(),Angle(),"models/sprops/misc/axis_plane.mdl",Vector(1))
+    
+    local HologramData = {}
+    local Holograms = {}
+    
+    local function PHE_save(path)
+        HologramData = {}
+        for i,v in pairs(Holograms) do
+            table.insert(HologramData,{
+                Index = v.Name,
+                Position = Origin:worldToLocal(v:getPos()),
+                Angle = v:getAngles(),
+                Model = v:getModel(),
+                Scale = v:getScale(),
+                Color = v:getColor(),
+                Material = v:getMaterial(),
+                Parent = v:getParent(),
+                Clips = v:getClipping()
+                })
+        end
+        file.write("PhoenixHoloEditor/saves/"..path..".txt",von.serialize(HologramData))
+        timer.simple(0,function() if file.exists("PhoenixHoloEditor/saves/"..path..".txt") then print("File saved succesfully!\nPhoenixHoloEditor/saves/"..path..".txt") else print("File not found in the saves folder... double check it's there.") end end)
+    end
+    local function PHE_load(path)
+        print(path)
+    end
+    
+    if not file.exists("PhoenixHoloEditor/") then file.createDir("PhoenixHoloEditor") file.createDir("PhoenixHoloEditor/saves") file.createDir("PhoenixHoloEditor/autosaves") file.createDir("PhoenixHoloEditor/data") end
+    
+    local menuToggle = false
+    local cursorX,cursorY = input.getCursorPos()
+    hook.add("Think","PhoenixEditor-Think",function()
+        local enableClk = changed("editorEnableCheck",input.isKeyDown(editorEnableKey)) and input.isKeyDown(editorEnableKey)
+        if input.canLockControls() and enableClk then input.enableCursor(true) input.lockControls(true) elseif not input.canLockControls() and enableClk then print("Can't lock controls! Please wait!") end
+        if not input.isControlLocked() and input.getCursorVisible() then input.enableCursor(false) end
+        
+        if input.isControlLocked() then
+            if changed("OpenSpawnmenu",input.isKeyDown(KEY.Q)) and input.isKeyDown(KEY.Q) then if menuToggle then concmd("-menu") else concmd("+menu") end menuToggle = !menuToggle end
+        end
+        
+        cursorX,cursorY = input.getCursorPos()
+        input_LEFTCLICK = input.isMouseDown(MOUSE.LEFT)
+        changed_LEFTCLICK = changed("UserLeftClicked",input_LEFTCLICK)
+        end)
+        
+    local oldX,oldY = input.getCursorPos()
+    local camPos = chip():getPos()+Vector(-100,0,0)
+    local camAngle = Angle()
+    hook.add("mouseWheeled","PhoenixEditor-wheelmove",function(delta)
+        if input.isControlLocked() then camPos = camPos+Vector(delta*10,0,0):getRotated(camAngle) end
+        end)
+    hook.add("CalcView","PhoenixEditor-CalcView",function()
+        if input.isControlLocked() then
+            camPos = camPos + Vector(boolToFloat(input.isKeyDown(KEY.W))-boolToFloat(input.isKeyDown(KEY.S)),boolToFloat(input.isKeyDown(KEY.A))-boolToFloat(input.isKeyDown(KEY.D)),boolToFloat(input.isKeyDown(KEY.SPACE))-boolToFloat(input.isKeyDown(KEY.CTRL))):getRotated(camAngle)
+            if input.isMouseDown(MOUSE.MIDDLE) then
+                if changed("moveCursorCalcViewX",cursorX) or changed("moveCursorCalcViewY",cursorY) then camAngle = camAngle + Angle((cursorY-oldY)/3,math.clamp(-(cursorX-oldX)/3,-15,15),0) oldX,oldY = input.getCursorPos() end
+                camAngle:setP(math.clamp(camAngle.p,-90,90))
+            end
+            local view = {
+                origin = camPos,
+                angles = camAngle,
+                drawviewer = false
+            }
+            return view
+        end
+        end)
+    hook.add("OnEntityCreated","PhoenixEditor-SpawnProps",function(e)
+        if input.isControlLocked() then
+        if isValid(e) and e:getOwner() == owner() and e:getClass() ~= "starfall_hologram" then
+            local _hologram = hologram.create(Origin:getPos(),Origin:getAngles(),e:getModel(),Vector(1))
+            table.insert(Holograms,_hologram)
+            net.start("RemoveSpawnedEntity") net.writeEntity(e) net.send(owner())
+        end
+        end
+        end)
+    local resX,resY = render.getGameResolution()
+    local editorstart,editorend = resX*0.9,resX*0.1
+    local infopanelstart,infopanelend = resY*0.66,resY*0.34
+    
+    local activeButton = nil
+    local function ui_Button(index,x,y,text,func)
+        local textX,textY = render.getTextSize(text)
+        local clk = input_LEFTCLICK and cursorX > x and cursorY > y and cursorX < x+textX+3 and cursorY < y+textY+3
+        if clk and activeButton ~= index then activeButton = index end
+        if activeButton == index then func() render.setColor(COLORS.border) render.drawRect(x,y,textX+3,textY+3) end
+        
+        render.setColor(COLORS.text)
+        render.drawRectOutline(x,y,textX+3,textY+3)
+        render.drawSimpleTextOutlined(x+1.5,y+1.5,text,1,COLORS.textoutline,TEXT_ALIGN.LEFT,TEXT_ALIGN.TOP)
+    end
+    local function button(x,y,text,func)
+        local textX,textY = render.getTextSize(text)
+        local clk = changed_LEFTCLICK and input_LEFTCLICK and cursorX > x and cursorY > y and cursorX < x+textX+3 and cursorY < y+textY+3
+        if clk then func() render.setColor(COLORS.border) render.drawRect(x,y,textX+3,textY+3) end
+        render.setColor(COLORS.border)
+        render.drawRectOutline(x,y,textX+3,textY+3)
+        render.setColor(COLORS.text)
+        render.drawSimpleTextOutlined(x+1.5,y+1.5,text,1,COLORS.textoutline,TEXT_ALIGN.LEFT,TEXT_ALIGN.TOP)
+        if clk then return func() end
+    end
+    local switchBoolTable = {}
+    local function switch(index,x,y,text,func)
+        local textX,textY = render.getTextSize(text)
+        local clk = changed_LEFTCLICK and input_LEFTCLICK and cursorX > x and cursorY > y and cursorX < x+textX+3 and cursorY < y+textY+3
+        if switchBoolTable[index] == nil then switchBoolTable[index] = false elseif switchBoolTable[index] then render.setColor(COLORS.border) render.drawRect(x,y,textX+3,textY+3) end
+        if clk then switchBoolTable[index] = !switchBoolTable[index] if switchBoolTable[index] then func() end end
+        
+        render.setColor(COLORS.border)
+        render.drawRectOutline(x,y,textX+3,textY+3)
+        render.setColor(COLORS.text)
+        render.drawSimpleTextOutlined(x+1.5,y+1.5,text,1,COLORS.textoutline,TEXT_ALIGN.LEFT,TEXT_ALIGN.TOP)
+        
+        return switchBoolTable[index]
+    end
+    local mat = material.create("UnlitGeneric")
+    local function ui_Spawnicon(x,y,path)
+        mat:setTexture("$basetexture","spawnicons/"..string.replace(path,"mdl","png"))
+        render.setMaterial(mat)
+        render.drawTexturedRectFast(x,y,24,24)
+    end
+    local function closeAllBools()
+        for _,v in pairs(switchBoolTable) do v = false end
+        activeButton = nil
+    end
+    hook.add("postdrawhud","PhoenixEditor-DrawHud",function()
+        if input.isControlLocked() then
+            render.setFont(COLORS.font)
+            render.setColor(COLORS.background)
+            render.drawRectFast(editorstart,0,editorend,resY)
+            render.setColor(COLORS.border)
+            render.drawRectOutline(editorstart,infopanelstart,editorend,infopanelend,2)
+            ui_Button(1,editorstart,0,"FILE",function()
+                button(editorstart+5,infopanelstart+(infopanelend*0.01),"QuickSave",function() PHE_save(os.date("%b")..os.date("%d")..os.date("%Y").."_"..os.time()) end)
+                if switch("LoadPHE",editorstart+5,infopanelstart+(infopanelend*0.08),"Load from PHE",function()end) then
+                    local files,dirs = file.find("phoenixholoeditor/saves/*","namedesc")
+                    for i,v in pairs(files) do
+                        button(editorstart-200,resY-(26*i),v,function() PHE_load("phoenixholoeditor/saves/"..v) closeAllBools() end)
+                    end
+                end
+                if switch("LoadAuto",editorstart+5,infopanelstart+(infopanelend*0.12),"Load Autosave",function()end) then
+                    local files,dirs = file.find("phoenixholoeditor/autosaves/*","namedesc")
+                end
+                end)
+            ui_Button(2,editorstart+render.getTextSize("FILE")+10,0,"EDIT",function()
+                end)
+            ui_Button(3,editorstart+render.getTextSize("FILE")+render.getTextSize("EDIT")+20,0,"TOOLS",function()
+                end)
+            for i,v in pairs(Holograms) do
+                if UI_SHOWICONS then ui_Spawnicon(editorstart+4,30+(26*(i-1)),v:getModel()) end
+                ui_Button(-i,editorstart+30,30+(26*(i-1)),v:getModel(),function()  end)
+            end
+        end
+        end)
+        
+    end
+    
+end
+
+changedTable = {}
+function changed(index,obj)
+    local bool = (obj ~= changedTable[index])
+    changedTable[index] = obj
+    return bool
+end
+
+function boolToFloat(bool)
+    if bool then return 1 else return 0 end
+end
