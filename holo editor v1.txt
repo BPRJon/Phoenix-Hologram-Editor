@@ -16,7 +16,7 @@ elseif CLIENT then
         font = "Trebuchet18"
     }
     local AUTOSAVE_interval = 60 --in seconds. currently doesnt do anything
-    local UI_SHOWICONS = true --if you are getting laggy performace turn this off
+    local UI_SHOWICONS = true --if you are getting laggy performace turn this off. uses ~1-2k cpu
     
     Origin = hologram.create(chip():getPos(),Angle(),"models/sprops/misc/axis_plane.mdl",Vector(1))
     
@@ -42,7 +42,17 @@ elseif CLIENT then
         timer.simple(0,function() if file.exists("PhoenixHoloEditor/saves/"..path..".txt") then print("File saved succesfully!\nPhoenixHoloEditor/saves/"..path..".txt") else print("File not found in the saves folder... double check it's there.") end end)
     end
     local function PHE_load(path)
-        print(path)
+        local holodata = von.deserialize(file.read(path))
+        local originpos = Origin:getPos()
+        local createholo = hologram.create
+        
+        hook.add("think","PHE_load_createholos",function()
+            for i,v in pairs(holodata) do
+                local holo = createholo(originpos+v.Position,v.Angle,v.Model,v.Scale)
+                table.insert(Holograms,holo)
+                if i == table.count(holodata) then hook.remove("think","PHE_load_createholos") end
+            end
+        end)
     end
     
     if not file.exists("PhoenixHoloEditor/") then file.createDir("PhoenixHoloEditor") file.createDir("PhoenixHoloEditor/saves") file.createDir("PhoenixHoloEditor/autosaves") file.createDir("PhoenixHoloEditor/data") end
@@ -86,7 +96,7 @@ elseif CLIENT then
         end)
     hook.add("OnEntityCreated","PhoenixEditor-SpawnProps",function(e)
         if input.isControlLocked() then
-        if isValid(e) and e:getOwner() == owner() and e:getClass() ~= "starfall_hologram" then
+        if isValid(e) and e:getOwner() == owner() and e:getClass() == "prop_physics" then
             local _hologram = hologram.create(Origin:getPos(),Origin:getAngles(),e:getModel(),Vector(1))
             table.insert(Holograms,_hologram)
             net.start("RemoveSpawnedEntity") net.writeEntity(e) net.send(owner())
