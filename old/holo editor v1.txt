@@ -2,9 +2,7 @@
 --@name Phoenix Holo Editor
 --@author jon b
 --@shared
-if SERVER then
-    net.receive("RemoveSpawnedEntity",function() net.readEntity():remove() end)
-elseif CLIENT then
+if CLIENT then
     if player() == owner() then
     local editorEnableKey = KEY.P --change P to whatever key you want
     local COLORS = {
@@ -16,6 +14,7 @@ elseif CLIENT then
     }
     local AUTOSAVE_interval = 60 --in seconds. currently doesnt do anything
     local UI_SHOWICONS = true --if you are getting laggy performace turn this off. uses ~1-2k cpu
+    local circle_radius = 10 --gizmo grabber size in pixels
     
     
     
@@ -64,7 +63,8 @@ elseif CLIENT then
     local menuToggle = false
     local activeButton = nil
     local cursorX,cursorY = input.getCursorPos()
-    local moveXclk,moveYclk,moveZclk
+    local moveXclk,moveYclk,moveZclk,changeModeClk
+    local gizmoMode = 1
     local trace_intersectRayWithPlane = trace.intersectRayWithPlane
     local render_getEyePos = render.getEyePos
     local input_screenToVector = input.screenToVector
@@ -72,14 +72,18 @@ elseif CLIENT then
     local function think_Gizmo()
         if isValid(Holograms[activeButton]) then
             local ent = Holograms[activeButton]
-            local entPos = ent:getPos()
+            local entPos,entAng = ent:getPos(),ent:getAngles()
             local delta = input_screenToVector(cursorX,cursorY)
+            if changed("didTheyChangeGizmoMode",changeModeClk) and input_LEFTCLICK then gizmoMode = gizmoMode + 1 if gizmoMode > 3 then gizmoMode = 1 end end
             if changed("didTheyClickXGizmo",moveXclk) then local planeNormal = Vector(math.normalizeAngle((render_getEyePos()-entPos):getAngle().r)/180,0,1) oldHitVec = trace_intersectRayWithPlane(render_getEyePos(),delta,entPos,planeNormal) end
             if moveXclk then
                 local planeNormal = Vector(math.normalizeAngle((render_getEyePos()-entPos):getAngle().r)/180,0,1)
                 local newHitVec = trace_intersectRayWithPlane(render_getEyePos(),delta,entPos,planeNormal)
                 if newHitVec then
-                    ent:setPos(entPos+Vector(newHitVec.x-oldHitVec.x,0,0))
+                    if gizmoMode == 1 then ent:setPos(entPos+Vector(newHitVec.x-oldHitVec.x,0,0):getRotated(entAng))
+                    elseif gizmoMode == 2 then ent:setAngles(Angle((newHitVec-entPos):getAngle().y,0,0))
+                    else
+                    end
                     oldHitVec = newHitVec
                 end
             end
@@ -88,7 +92,7 @@ elseif CLIENT then
                 local planeNormal = Vector(0,math.normalizeAngle((render_getEyePos()-entPos):getAngle().p)/180,1)
                 local newHitVec = trace_intersectRayWithPlane(render_getEyePos(),delta,entPos,planeNormal)
                 if newHitVec then
-                    ent:setPos(entPos+Vector(0,newHitVec.y-oldHitVec.y,0))
+                    ent:setPos(entPos+Vector(0,newHitVec.y-oldHitVec.y,0):getRotated(entAng))
                     oldHitVec = newHitVec
                 end
             end
@@ -97,7 +101,7 @@ elseif CLIENT then
                 local planeNormal = Vector(1,math.normalizeAngle(math.round((render_getEyePos()-entPos):getAngle().y)/180,-1),0)
                 local newHitVec = trace_intersectRayWithPlane(render_getEyePos(),delta,entPos,planeNormal)
                 if newHitVec then
-                    ent:setPos(entPos+Vector(0,0,newHitVec.z-oldHitVec.z))
+                    ent:setPos(entPos+Vector(0,0,newHitVec.z-oldHitVec.z):getRotated(entAng))
                     oldHitVec = newHitVec
                 end
             end
@@ -125,6 +129,7 @@ elseif CLIENT then
     hook.add("mouseWheeled","PhoenixEditor-wheelmove",function(delta)
         if input.isControlLocked() then camPos = camPos+Vector(delta*10,0,0):getRotated(camAngle) end
         end)
+    local drawPlayer = true
     hook.add("CalcView","PhoenixEditor-CalcView",function()
         if input.isControlLocked() then
             camPos = camPos + Vector(boolToFloat(input.isKeyDown(KEY.W))-boolToFloat(input.isKeyDown(KEY.S)),boolToFloat(input.isKeyDown(KEY.A))-boolToFloat(input.isKeyDown(KEY.D)),boolToFloat(input.isKeyDown(KEY.SPACE))-boolToFloat(input.isKeyDown(KEY.CTRL))):getRotated(camAngle)
@@ -136,7 +141,7 @@ elseif CLIENT then
             local view = {
                 origin = camPos,
                 angles = camAngle,
-                drawviewer = false
+                drawviewer = drawPlayer
             }
             return view
         end
@@ -162,6 +167,8 @@ elseif CLIENT then
     local render_getTextSize = render.getTextSize
     local render_drawLine = render.drawLine
     local render_drawCircle = render.drawCircle
+    local render_drawRectOutline = render.drawRectOutline
+    local render_drawRectRotated = render.drawRectRotated
     
     local function ui_Button(index,x,y,text,func)
         local textX,textY = render_getTextSize(text)
@@ -199,12 +206,16 @@ elseif CLIENT then
     end
     local math_distance = math.distance
     local function ui_Gizmo()
-        local circle_radius = 5
         if isValid(Holograms[activeButton]) then
             local ent = Holograms[activeButton]
             local pos,ang = ent:getPos(),ent:getAngles()
-            local screenPos,screenWX,screenWY,screenWZ = pos:toScreen(),(pos+Vector(20,0,0)):toScreen(),(pos+Vector(0,20,0)):toScreen(),(pos+Vector(0,0,20)):toScreen()
-            if changed_LEFTCLICK then moveXclk,moveYclk,moveZclk = math_distance(screenWX.x,screenWX.y,cursorX,cursorY) < circle_radius and input_LEFTCLICK,math_distance(screenWY.x,screenWY.y,cursorX,cursorY) < circle_radius and input_LEFTCLICK,math_distance(screenWZ.x,screenWZ.y,cursorX,cursorY) < circle_radius and input_LEFTCLICK end
+            local screenPos,screenWX,screenWY,screenWZ = pos:toScreen(),(pos+Vector(20,0,0):getRotated(ang)):toScreen(),(pos+Vector(0,20,0):getRotated(ang)):toScreen(),(pos+Vector(0,0,20):getRotated(ang)):toScreen()
+            if changed_LEFTCLICK then moveXclk,moveYclk,moveZclk,changeModeClk = math_distance(screenWX.x,screenWX.y,cursorX,cursorY) < circle_radius and input_LEFTCLICK,math_distance(screenWY.x,screenWY.y,cursorX,cursorY) < circle_radius and input_LEFTCLICK,math_distance(screenWZ.x,screenWZ.y,cursorX,cursorY) < circle_radius and input_LEFTCLICK, math_distance(screenPos.x,screenPos.y,cursorX,cursorY) < circle_radius and input_LEFTCLICK end
+            render_setColor(Color(255,255,0))
+            if gizmoMode == 1 then render_drawLine(screenPos.x,screenPos.y-circle_radius,screenPos.x-circle_radius,screenPos.y+circle_radius) render_drawLine(screenPos.x,screenPos.y-circle_radius,screenPos.x+circle_radius,screenPos.y+circle_radius) render_drawLine(screenPos.x-circle_radius,screenPos.y+circle_radius,screenPos.x+circle_radius,screenPos.y+circle_radius)
+            elseif gizmoMode == 2 then render_drawCircle(screenPos.x,screenPos.y,circle_radius)
+            elseif gizmoMode == 3 then render_drawRectOutline(screenPos.x-circle_radius,screenPos.y-circle_radius,circle_radius*2,circle_radius*2)
+            end
             render_setColor(Color(255,0,0))
             render_drawLine(screenPos.x,screenPos.y,screenWX.x,screenWX.y)
             render_drawCircle(screenWX.x,screenWX.y,circle_radius)
@@ -265,6 +276,7 @@ elseif CLIENT then
                 end)
             ui_Button("PHE_TOOL",editorstart+render_getTextSize("FILE")+render_getTextSize("EDIT")+20,0,"TOOLS",function()
                 button(editorstart,infopanelstart+(infopanelend*0.01),"Toggle Icons",function() UI_SHOWICONS = !UI_SHOWICONS end)
+                button(editorstart,infopanelstart+(infopanelend*0.05),"Draw Player",function() drawPlayer = !drawPlayer end)
                 end)
             for i,v in pairs(Holograms) do
                 if UI_SHOWICONS then ui_Spawnicon(editorstart+4,30+(26*(i-1)),v:getModel()) end
@@ -275,6 +287,8 @@ elseif CLIENT then
         
     end
     
+elseif SERVER then
+    net.receive("RemoveSpawnedEntity",function() net.readEntity():remove() end)
 end
 
 changedTable = {}
